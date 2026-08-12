@@ -1328,6 +1328,24 @@ class TestSortAndSelectDevice(TestCase):
                     c = torch.isin(a, b, assume_unique=assume_unique)
                     self.assertEqual(c, ec)
 
+    @parametrize(
+        "elements_dtype,test_dtype,value",
+        [
+            (torch.int32, torch.half, 4097),
+            (torch.int64, torch.float, 2**25 + 1),
+        ],
+    )
+    def test_isin_promotion_collision(self, device, elements_dtype, test_dtype, value):
+        a = torch.tensor([value, value + 1], device=device, dtype=elements_dtype)
+        self.assertEqual(a[0].to(test_dtype), a[1].to(test_dtype))
+        # 20 test elements picks the sorting algorithm, the one that deduplicates.
+        b = torch.arange(1, 21, device=device, dtype=test_dtype)
+        b_match = torch.cat([a[:1].to(test_dtype), b])
+        for assume_unique in [False, True]:
+            kwargs = {"assume_unique": assume_unique}
+            self.assertEqual(torch.isin(a, b, **kwargs), [False, False])
+            self.assertEqual(torch.isin(a, b_match, **kwargs), [True, True])
+
     @onlyAccelerator
     @dtypes(*all_types())
     def test_isin_different_devices(self, device, dtype):
